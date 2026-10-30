@@ -1,0 +1,230 @@
+[
+  {
+    "id": "TC-RS-001",
+    "ac": "AC1",
+    "text": "Given a valid RoboShadow credential header, when roboshadow_list_organisations is called, then it returns the organisations visible to that credential, with no required parameters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_organisations_returns_visible_orgs"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: tests/test_tools.py::test_list_organisations_returns_visible_orgs PASSED. Also exercised live: GET /mcp tools/call roboshadow_list_organisations against https://api.roboshadow.com with a placeholder refresh token returned a structured {\"error\":{\"code\":\"unauthorized\",...}} envelope (not a crash/500), confirming the real exchange+call path runs end to end; organisation data itself needs a real vendor account (TC-RS-018)."
+  },
+  {
+    "id": "TC-RS-002",
+    "ac": "AC2",
+    "text": "Given a valid credential and organisation_id, when roboshadow_list_organisation_users is called, then it returns that organisation's users; when organisation_id does not belong to the credential, then it returns the unauthorized error envelope, not the raw vendor 403.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_organisation_users_returns_users",
+      "tests/test_tools.py::test_list_organisation_users_maps_403_to_unauthorized"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. The 403-mapping test hits a fake org ('org-forbidden') returning HTTP 403 and asserts the tool result's error.code == 'unauthorized' (api_client.py _STATUS_TO_CODE[403])."
+  },
+  {
+    "id": "TC-RS-003",
+    "ac": "AC3",
+    "text": "Given an organisation with more devices than the default page size, when roboshadow_list_devices is called with no filters, then it returns up to the default page size with has_more=true; when called with search/sort_by/sort_desc, then the returned set reflects those filters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_devices_default_page_has_more",
+      "tests/test_tools.py::test_list_devices_search_and_sort_filters"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. Fake transport serves 60 devices; default call returns exactly 50 items with has_more=true (total=60); search='PC-05' + sort_desc=true returns only matching items."
+  },
+  {
+    "id": "TC-RS-004",
+    "ac": "AC4",
+    "text": "Given a valid device_id, when roboshadow_get_device is called, then it returns that device's summary record; when device_id does not exist in the organisation, then it returns the not_found envelope.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_device_returns_summary",
+      "tests/test_tools.py::test_get_device_unknown_id_returns_not_found"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. Fake transport returns HTTP 404 for device_id='dev-missing'; tool result's error.code == 'not_found' (api_client.py _STATUS_TO_CODE[404])."
+  },
+  {
+    "id": "TC-RS-005",
+    "ac": "AC5",
+    "text": "Given a valid device_id, when roboshadow_get_device_detail is called with each of section in {antivirus, applications, disks, services, updates, userprofiles, users, vulnerability_summary}, then it returns that sub-resource for the device.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_device_detail_all_sections"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_device_detail_all_sections PASSED for all 7 parametrized non-disks sections, plus an added test_get_device_detail_disks_section_returns_raw_vendor_array (PASSED) covering the 8th ('disks') separately because that vendor endpoint returns a plain array, not the {pagedData,totalItems} envelope the others use -- same AC, same tool, one extra test function to match the real response shape (noted as an addition, not a change to the AC)."
+  },
+  {
+    "id": "TC-RS-006",
+    "ac": "AC6",
+    "text": "Given a valid device_id and disk_id taken from that device's disk list, when roboshadow_list_disk_shares is called, then it returns the shares exposed on that disk.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_disk_shares_returns_shares"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_list_disk_shares_returns_shares PASSED."
+  },
+  {
+    "id": "TC-RS-007",
+    "ac": "AC7",
+    "text": "Given a valid organisation_id, when roboshadow_list_application_groups is called with no group_id, then it returns the organisation's installed-application groups; when called with a group_id from that list, then it returns that group's detail (device count, affected devices).",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_application_groups_returns_groups",
+      "tests/test_tools.py::test_list_application_groups_detail_for_group_id"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
+  },
+  {
+    "id": "TC-RS-008",
+    "ac": "AC8",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {antivirus_summary, antivirus_by_device, antivirus_ransomware, antivirus_threats, antivirus_windows_defender, firewalls}, then it returns the matching endpoint-security report for the organisation.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_antivirus_and_firewall_variants"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_antivirus_and_firewall_variants PASSED for all 6 parametrized report values."
+  },
+  {
+    "id": "TC-RS-009",
+    "ac": "AC9",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {vulnerabilities_summary, vulnerabilities_cves, vulnerabilities_cpes, vulnerabilities_applications, vulnerabilities_devices}, then it returns the matching vulnerability report; when roboshadow_get_cve_fixes is called with a cve_id found in one of those reports, then it returns the fixes available for that CVE.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_vulnerability_variants",
+      "tests/test_tools.py::test_get_cve_fixes_returns_fixes"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_vulnerability_variants PASSED for all 5 parametrized report values; test_get_cve_fixes_returns_fixes PASSED."
+  },
+  {
+    "id": "TC-RS-010",
+    "ac": "AC10",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report=\"remediation\", then it returns the organisation's remediation attempts; when roboshadow_get_remediation_cves is called with an attempt_id from that report, then it returns the CVEs addressed by that attempt.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_remediation",
+      "tests/test_tools.py::test_get_remediation_cves_returns_cves"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
+  },
+  {
+    "id": "TC-RS-011",
+    "ac": "AC11",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {updates_by_device, updates_summary}, then it returns the matching OS-update/patch-compliance report; filters (critical/security/driver/rollup/other/workstations/servers/is_reboot_required, days) narrow the updates_by_device result accordingly.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_updates_variants",
+      "tests/test_tools.py::test_get_report_updates_by_device_filters"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_updates_variants PASSED for both report values; test_get_report_updates_by_device_filters PASSED (critical=true narrows the fake transport's result to items with critical=true)."
+  },
+  {
+    "id": "TC-RS-012",
+    "ac": "AC12",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {hardware_by_device, hardware_summary, disks, disks_by_device, disks_summary}, then it returns the matching hardware/disk report.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_hardware_and_disk_variants"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_hardware_and_disk_variants PASSED for all 5 parametrized report values."
+  },
+  {
+    "id": "TC-RS-013",
+    "ac": "AC13",
+    "text": "Given a valid organisation_id, when roboshadow_get_mfa_report is called, then it returns the Microsoft 365 MFA compliance report RoboShadow has for that organisation.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_mfa_report_returns_report"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_mfa_report_returns_report PASSED (asserts users list and security_defaults_enabled are reshaped from the vendor's hasMoreData/securityDefaultsSetting/users envelope)."
+  },
+  {
+    "id": "TC-RS-014",
+    "ac": "AC14",
+    "text": "Given a valid organisation_id, when roboshadow_list_vulnerability_scans is called, then it returns the status of all external vulnerability scans for the organisation; when roboshadow_get_vulnerability_scan_summary / roboshadow_get_scanned_ips is called with a scan_id from that list, then it returns that scan's summary / scanned-IP overview respectively.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_vulnerability_scans_returns_status",
+      "tests/test_tools.py::test_get_vulnerability_scan_summary_and_scanned_ips"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
+  },
+  {
+    "id": "TC-RS-015",
+    "ac": "AC15",
+    "text": "Given a tool call with no X-RoboShadow-Refresh-Token header, when any roboshadow tool is called, then the server returns 401 listing the required header, not a 500 and not a silently-empty result.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_middleware.py::test_missing_credential_header_returns_401_with_required_headers"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: PASSED for header values [None, '', '   ']. Also verified live: starting the real server (uv run python -m roboshadow_mcp) and `curl -X POST :8080/mcp` with no X-RoboShadow-Refresh-Token header returned HTTP 401 with body {\"required_headers\":[\"X-RoboShadow-Refresh-Token\"],...} -- see docs/tickets/PRD-21238.md Self-test section."
+  },
+  {
+    "id": "TC-RS-016",
+    "ac": "AC16",
+    "text": "Given two concurrent tool calls carrying two different tenants' X-RoboShadow-Refresh-Token values, when both resolve to RoboShadow access tokens and call the vendor API, then neither request's derived access token or response data is visible to or reused by the other call.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_middleware.py::test_requests_interleaved_in_one_context_do_not_leak_credentials_across_overlap",
+      "tests/test_isolation.py::test_concurrent_tenants_never_share_access_token_or_data",
+      "tests/test_isolation.py::test_concurrent_access_token_exchanges_do_not_cross"
+    ],
+    "result": "pass",
+    "evidence": "Review round 2 fix: round 1's test_concurrent_requests_through_real_middleware_never_leak_credentials drove both requests via asyncio.gather, which wraps each in its own asyncio.Task; every Task gets an independently-copied contextvars.Context, so it could not have failed even with GatewayCredentialsMiddleware's _credentials_var.reset() (server.py:105-107) missing entirely -- verified by removing both .reset() calls in the worktree and re-running the suite: all 106 tests, including that one, stayed green (change not committed). Replaced it with test_requests_interleaved_in_one_context_do_not_leak_credentials_across_overlap (tests/test_middleware.py): both requests run as plain coroutine objects stepped by hand with .send(None) -- no gather/create_task/ensure_future, hence no Task and no context copy -- so they share one contextvars.Context. Request A suspends mid-flight (after its credentials are set, before the middleware finally resets them) at a bare asyncio.sleep(0) checkpoint; request B then runs to completion end-to-end in that same still-open context; A is resumed last. Empirically verified this version does catch the bug: with both .reset() calls removed in server.py, the test fails at \"still_pending.refresh_token == tenant-a-refresh\" (observes tenant-b-refresh instead) -- restored immediately after, not committed. uv run pytest -q on the review-fix commit: 106 passed, 0 failed (unchanged count from round 1; one test replaced, not added). The two pre-existing tests/test_isolation.py tests are kept as secondary evidence (they prove RoboShadowClient instances and lazily-exchanged access tokens never share state) -- not the sole evidence for AC16's cross-request claim."
+  },
+  {
+    "id": "TC-RS-017",
+    "ac": "AC1",
+    "text": "Given the server is running, when tools/list is requested, then exactly the 14 roboshadow_* tools are reported, all with readOnlyHint=true and the documented required parameters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_tools_list_snapshot"
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_tools_list_snapshot, test_required_params[*] (14 params) and test_all_tools_are_read_only[*] (14 tools) all PASSED. Also verified live: curl tools/list against the running server (placeholder header) returned exactly 14 roboshadow_* tool names, matching the EXPECTED_TOOLS snapshot."
+  },
+  {
+    "id": "TC-RS-018",
+    "ac": "AC9",
+    "text": "Given a real RoboShadow trial organisation, when an agent calls one tool per capability group (devices, antivirus report, vulnerability report, remediation report, MFA report, vulnerability scanner) end to end, then the live response field shapes match what was assumed from the OpenAPI schema.",
+    "type": "manual",
+    "steps": [
+      "Obtain a RoboShadow trial/test account and its refresh token",
+      "Call roboshadow_list_devices, roboshadow_get_report(report=antivirus_summary), roboshadow_get_report(report=vulnerabilities_summary), roboshadow_get_report(report=remediation), roboshadow_get_mfa_report, and roboshadow_list_vulnerability_scans against that account",
+      "Compare each response's field names/types against the OpenAPI schema assumptions in the tech design"
+    ],
+    "expect": "Every field the design assumes from the OpenAPI schema is present with the expected type in the live response; any divergence is filed as a follow-up before relying on that field.",
+    "result": "blocked",
+    "evidence": "needs a real vendor account -- not available at design or dev time; see references/mcp-track.md 2.5 (no test account does not block this ticket). Partial substitute evidence: a placeholder refresh token was used against the real https://api.roboshadow.com and correctly produced a structured unauthorized error envelope (not a crash), confirming the exchange+call wiring itself is live-correct; only the field-shape assumptions remain unverified."
+  }
+]
