@@ -1,0 +1,194 @@
+[
+  {
+    "id": "TC-RS-001",
+    "ac": "AC1",
+    "text": "Given a valid RoboShadow credential header, when roboshadow_list_organisations is called, then it returns the organisations visible to that credential, with no required parameters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_organisations_returns_visible_orgs"
+    ]
+  },
+  {
+    "id": "TC-RS-002",
+    "ac": "AC2",
+    "text": "Given a valid credential and organisation_id, when roboshadow_list_organisation_users is called, then it returns that organisation's users; when organisation_id does not belong to the credential, then it returns the unauthorized error envelope, not the raw vendor 403.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_organisation_users_returns_users",
+      "tests/test_tools.py::test_list_organisation_users_maps_403_to_unauthorized"
+    ]
+  },
+  {
+    "id": "TC-RS-003",
+    "ac": "AC3",
+    "text": "Given an organisation with more devices than the default page size, when roboshadow_list_devices is called with no filters, then it returns up to the default page size with has_more=true; when called with search/sort_by/sort_desc, then the returned set reflects those filters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_devices_default_page_has_more",
+      "tests/test_tools.py::test_list_devices_search_and_sort_filters"
+    ]
+  },
+  {
+    "id": "TC-RS-004",
+    "ac": "AC4",
+    "text": "Given a valid device_id, when roboshadow_get_device is called, then it returns that device's summary record; when device_id does not exist in the organisation, then it returns the not_found envelope.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_device_returns_summary",
+      "tests/test_tools.py::test_get_device_unknown_id_returns_not_found"
+    ]
+  },
+  {
+    "id": "TC-RS-005",
+    "ac": "AC5",
+    "text": "Given a valid device_id, when roboshadow_get_device_detail is called with each of section in {antivirus, applications, disks, services, updates, userprofiles, users, vulnerability_summary}, then it returns that sub-resource for the device.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_device_detail_all_sections"
+    ]
+  },
+  {
+    "id": "TC-RS-006",
+    "ac": "AC6",
+    "text": "Given a valid device_id and disk_id taken from that device's disk list, when roboshadow_list_disk_shares is called, then it returns the shares exposed on that disk.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_disk_shares_returns_shares"
+    ]
+  },
+  {
+    "id": "TC-RS-007",
+    "ac": "AC7",
+    "text": "Given a valid organisation_id, when roboshadow_list_application_groups is called with no group_id, then it returns the organisation's installed-application groups; when called with a group_id from that list, then it returns that group's detail (device count, affected devices).",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_application_groups_returns_groups",
+      "tests/test_tools.py::test_list_application_groups_detail_for_group_id"
+    ]
+  },
+  {
+    "id": "TC-RS-008",
+    "ac": "AC8",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {antivirus_summary, antivirus_by_device, antivirus_ransomware, antivirus_threats, antivirus_windows_defender, firewalls}, then it returns the matching endpoint-security report for the organisation.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_antivirus_and_firewall_variants"
+    ]
+  },
+  {
+    "id": "TC-RS-009",
+    "ac": "AC9",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {vulnerabilities_summary, vulnerabilities_cves, vulnerabilities_cpes, vulnerabilities_applications, vulnerabilities_devices}, then it returns the matching vulnerability report; when roboshadow_get_cve_fixes is called with a cve_id found in one of those reports, then it returns the fixes available for that CVE.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_vulnerability_variants",
+      "tests/test_tools.py::test_get_cve_fixes_returns_fixes"
+    ]
+  },
+  {
+    "id": "TC-RS-010",
+    "ac": "AC10",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report=\"remediation\", then it returns the organisation's remediation attempts; when roboshadow_get_remediation_cves is called with an attempt_id from that report, then it returns the CVEs addressed by that attempt.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_remediation",
+      "tests/test_tools.py::test_get_remediation_cves_returns_cves"
+    ]
+  },
+  {
+    "id": "TC-RS-011",
+    "ac": "AC11",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {updates_by_device, updates_summary}, then it returns the matching OS-update/patch-compliance report; filters (critical/security/driver/rollup/other/workstations/servers/is_reboot_required, days) narrow the updates_by_device result accordingly.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_updates_variants",
+      "tests/test_tools.py::test_get_report_updates_by_device_filters"
+    ]
+  },
+  {
+    "id": "TC-RS-012",
+    "ac": "AC12",
+    "text": "Given a valid organisation_id, when roboshadow_get_report is called with report in {hardware_by_device, hardware_summary, disks, disks_by_device, disks_summary}, then it returns the matching hardware/disk report.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_report_hardware_and_disk_variants"
+    ]
+  },
+  {
+    "id": "TC-RS-013",
+    "ac": "AC13",
+    "text": "Given a valid organisation_id, when roboshadow_get_mfa_report is called, then it returns the Microsoft 365 MFA compliance report RoboShadow has for that organisation.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_get_mfa_report_returns_report"
+    ]
+  },
+  {
+    "id": "TC-RS-014",
+    "ac": "AC14",
+    "text": "Given a valid organisation_id, when roboshadow_list_vulnerability_scans is called, then it returns the status of all external vulnerability scans for the organisation; when roboshadow_get_vulnerability_scan_summary / roboshadow_get_scanned_ips is called with a scan_id from that list, then it returns that scan's summary / scanned-IP overview respectively.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_list_vulnerability_scans_returns_status",
+      "tests/test_tools.py::test_get_vulnerability_scan_summary_and_scanned_ips"
+    ]
+  },
+  {
+    "id": "TC-RS-015",
+    "ac": "AC15",
+    "text": "Given a tool call with no X-RoboShadow-Refresh-Token header, when any roboshadow tool is called, then the server returns 401 listing the required header, not a 500 and not a silently-empty result.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_middleware.py::test_missing_credential_header_returns_401_with_required_headers"
+    ]
+  },
+  {
+    "id": "TC-RS-016",
+    "ac": "AC16",
+    "text": "Given two concurrent tool calls carrying two different tenants' X-RoboShadow-Refresh-Token values, when both resolve to RoboShadow access tokens and call the vendor API, then neither request's derived access token or response data is visible to or reused by the other call.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_isolation.py::test_concurrent_tenants_never_share_access_token_or_data"
+    ]
+  },
+  {
+    "id": "TC-RS-017",
+    "ac": "AC1",
+    "text": "Given the server is running, when tools/list is requested, then exactly the 14 roboshadow_* tools are reported, all with readOnlyHint=true and the documented required parameters.",
+    "type": "auto",
+    "source": "design",
+    "tests": [
+      "tests/test_tools.py::test_tools_list_snapshot"
+    ]
+  },
+  {
+    "id": "TC-RS-018",
+    "ac": "AC9",
+    "text": "Given a real RoboShadow trial organisation, when an agent calls one tool per capability group (devices, antivirus report, vulnerability report, remediation report, MFA report, vulnerability scanner) end to end, then the live response field shapes match what was assumed from the OpenAPI schema.",
+    "type": "manual",
+    "steps": [
+      "Obtain a RoboShadow trial/test account and its refresh token",
+      "Call roboshadow_list_devices, roboshadow_get_report(report=antivirus_summary), roboshadow_get_report(report=vulnerabilities_summary), roboshadow_get_report(report=remediation), roboshadow_get_mfa_report, and roboshadow_list_vulnerability_scans against that account",
+      "Compare each response's field names/types against the OpenAPI schema assumptions in the tech design"
+    ],
+    "expect": "Every field the design assumes from the OpenAPI schema is present with the expected type in the live response; any divergence is filed as a follow-up before relying on that field.",
+    "result": "untested",
+    "evidence": "needs a real vendor account — not available at design or dev time; see references/mcp-track.md 2.5 (no test account does not block this ticket)"
+  }
+]
