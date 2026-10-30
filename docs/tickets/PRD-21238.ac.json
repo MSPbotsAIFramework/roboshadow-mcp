@@ -194,10 +194,12 @@
     "type": "auto",
     "source": "design",
     "tests": [
-      "tests/test_isolation.py::test_concurrent_tenants_never_share_access_token_or_data"
+      "tests/test_middleware.py::test_concurrent_requests_through_real_middleware_never_leak_credentials",
+      "tests/test_isolation.py::test_concurrent_tenants_never_share_access_token_or_data",
+      "tests/test_isolation.py::test_concurrent_access_token_exchanges_do_not_cross"
     ],
     "result": "pass",
-    "evidence": "uv run pytest -v @ 01561e7: PASSED, plus a second isolation test (test_concurrent_access_token_exchanges_do_not_cross, also PASSED) that forces two token exchanges to genuinely overlap in time (artificial 50ms delay in the fake transport) via asyncio.gather and asserts the two resulting access tokens and tenant org data never cross -- not just that they happen not to race in practice."
+    "evidence": "Review round 1 fix: added test_concurrent_requests_through_real_middleware_never_leak_credentials (tests/test_middleware.py), which drives two concurrent requests through the real GatewayCredentialsMiddleware instance via asyncio.gather, sharing the real module-level _credentials_var, with a 0.05s delay inside the downstream app (not inside a client built outside the middleware) to force genuine overlap. Asserts max_in_flight == 2 (both requests were actually concurrent, not sequential) and that each request's before/after get_client_from_context() only ever sees its own tenant's token. uv run pytest -v on the review-fix commit: 106 passed, 0 failed (see Self-test section). The two pre-existing tests/test_isolation.py tests are kept as secondary evidence (they prove RoboShadowClient instances and lazily-exchanged access tokens never share state), per review round 1 suggestion 2 -- no longer the sole evidence for AC16's cross-request claim."
   },
   {
     "id": "TC-RS-017",
