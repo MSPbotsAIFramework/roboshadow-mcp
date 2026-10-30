@@ -33,3 +33,29 @@ Verdict: changes requested
    - Sanity-checked the test's detection power out of band (not committed — `scratch/PRD-21238/sanity_check_leak_detection.py` in the pipeline skill's scratch dir, not this repo): the identical `asyncio.gather` + in-app-delay pattern, applied to a deliberately broken shared-mutable-global (non-`ContextVar`) credentials store, does observe a leak (`req-a` reads back `tenant-b`'s token mid-flight) and fails the assertion — confirming the new test is not vacuously true, and only passes here because `GatewayCredentialsMiddleware` genuinely uses a per-task `contextvars.ContextVar`.
    - Re-run on `790a302` (synced with `main @ a5fb393`, unchanged since round 1): `uv run pytest -q` → **106 passed, 0 failed** (105 baseline + 1 new test; the two pre-existing isolation tests also still pass). `/health` → 200. Missing-header request → 401. `tools/list` with a placeholder token → 14 tools (unchanged). Chinese-character scan: clean. README "MSPbots Connector" section: untouched by this commit (`git diff --name-only 685b766..790a302` does not include `README.md`), already verified byte-identical in round 1.
    - Suggestion 1 (`reports.py` boolean filter params) not addressed — it is a suggestion, not a must-fix, and out of scope for a review-rework round that only touches listed must-fix items.
+
+## Round 2 · 2026-10-30 · reviewed dev/PRD-21238 @ 8946c07 (base main @ a5fb393)
+
+Verdict: changes requested
+
+### Scope
+
+Re-reviewed the round 1 fix (`790a302`, `8946c07`) on top of the rest of the diff, which round 1 already cleared and which is untouched by this fix (`git diff --stat 527c186..8946c07` touches only `tests/test_middleware.py`, `docs/tickets/PRD-21238-review.md`, `docs/tickets/PRD-21238.ac.json`). Re-ran gates on `8946c07` (synced with `main @ a5fb393`, unchanged): `uv run pytest -q` → 106 passed, 0 failed. Also ran a targeted experiment to check the new test's detection power (Finding 1).
+
+### Findings
+
+1. [must-fix] `tests/test_middleware.py:95-159` (`test_concurrent_requests_through_real_middleware_never_leak_credentials`, added in `790a302`) — the round 1 fix still does not test what AC16 and round 1's must-fix asked for, for a different reason than round 1's bypass. `asyncio.gather()` (line 144) wraps each of `one_request("req-a", ...)` / `one_request("req-b", ...)` in its own `asyncio.Task`, and every `asyncio.Task` gets an **independent copy** of the current `contextvars.Context` at creation time. A `ContextVar.set()` performed inside one Task's copied context can never be observed by, or leak into, a sibling Task's copied context — regardless of whether `GatewayCredentialsMiddleware.__call__`'s `finally: _credentials_var.reset(creds_token)` (`src/roboshadow_mcp/server.py:105-107`) runs at all.
+
+   Verified empirically: in the worktree, commented out both `.reset()` calls in `server.py` (no other change) and re-ran `uv run pytest -q` — all 106 tests still passed, including this new concurrency test *and* the pre-existing `test_token_reaches_request_context_and_is_reset` (same root cause: `asyncio.run()` also runs the coroutine as its own Task, and the test's trailing assertion runs back in the outer sync context, which was never touched in the first place). `server.py` was restored to the committed state immediately after; nothing from this experiment was committed.
+
+   So the test, as written, cannot fail even if request isolation were completely broken — it has the same "true by construction" property round 1 flagged in `tests/test_isolation.py`, just produced by Task-context copying instead of by two independently-constructed `build_server()` instances. The `scratch/PRD-21238/sanity_check_leak_detection.py` check cited in the Fixes note as validation does not establish detection power for the real mechanism: it simulates the leak with a plain shared mutable dict (`_shared_var`), which *is* a genuinely cross-task-shared object and would leak under `asyncio.gather` regardless of Task-context semantics. It says nothing about whether a `contextvars.ContextVar`-based mechanism — the one actually used in `server.py` — would be caught by this test pattern. `docs/tickets/PRD-21238.ac.json:202`'s TC-RS-016 evidence ("Asserts ... only ever sees its own tenant's token") inherits the same overstatement round 1 called out: it describes the assertion as proof of the production isolation logic, which this experiment shows it is not.
+
+   - What would fix it: drive both "requests" inside the *same* `asyncio.Task` / `Context`, interleaved manually (no `asyncio.gather`/`create_task` boundary between them) — e.g. step both `middleware(...)` coroutines by hand with alternating `.send(None)` calls, or gate them on a shared `asyncio.Event` within one task, so a missing/incorrect `.reset()` would actually be observable (request B seeing request A's leftover credentials, or the var still set after both complete, inspected from the *same* context that ran them). A same-task sequential variant — call the middleware once, assert `_credentials_var.get() is None` immediately after, then call it again with a different tenant and assert the same — would at minimum catch a missing `.reset()` in the common case; none of the current tests do this across two calls in one context (the empirical check above shows the existing single-call version stays green with `.reset()` removed too).
+
+### Suggestions
+
+1. `src/roboshadow_mcp/tools/reports.py:99-115` — unchanged since round 1, still a suggestion (not a must-fix), not addressed this round; fine, since this round was scoped to the one listed must-fix.
+
+### Not re-litigated
+
+- Everything round 1 already cleared (credential handling, tool consolidation, pagination defaults/caps, error-code mapping, README connector section, Dockerfile, no DB/migrations) — untouched by `790a302`/`8946c07`.
