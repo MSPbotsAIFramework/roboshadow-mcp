@@ -1,0 +1,26 @@
+# PRD-21238 · Code review
+
+## Round 1 · 2026-10-30 · reviewed dev/PRD-21238 @ 527c186 (base main @ a5fb393)
+
+Verdict: changes requested
+
+### Scope
+
+`git diff a5fb393...527c186` in `MSPbotsAIFramework/roboshadow-mcp` — the entire greenfield connector (14 tools, middleware, client, tests, README, Dockerfile). Gate re-run on the synced code: `uv sync && uv run pytest -q` → 105 passed, 0 failed (matches the Self-test section). README "MSPbots Connector" section diffed byte-for-byte against `~/.claude/skills/vendor-mcp-development/reference/readme-connector-section.md` — identical. Chinese-character scan (`grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .`) — clean. No credential (`refresh_token`/`access_token`) appears in any `log`/`print` call.
+
+### Findings
+
+1. [must-fix] `tests/test_isolation.py:16-19,30-42` (and the `build_server`/client wiring it depends on, `tests/_fakes.py:175-191`) — the automated test that TC-RS-016/AC16 cites as evidence for "no cross-request/cross-tenant state" does not exercise the mechanism that actually provides that guarantee in production. In production, isolation comes from `GatewayCredentialsMiddleware` setting a **module-level** `contextvars.ContextVar` (`_credentials_var`, `src/roboshadow_mcp/server.py:38-41`) per incoming HTTP request, read back by `get_client_from_context()` (`server.py:67-72`). `tests/_fakes.py:175-191`'s own docstring says `build_server()` "**Bypasses the HTTP middleware entirely**": each tenant in the test gets its own independently-constructed `FastMCP` instance wired via `lambda: client` directly to a pre-built `RoboShadowClient` (`_fakes.py:186,190`), never touching `_credentials_var` or `get_client_from_context` at all. Two separately-constructed Python objects not sharing state is true by construction regardless of whether the ContextVar set/reset logic is correct — the test cannot fail even if that logic were broken (e.g. a missing `.reset()`, or a future refactor that lifts `_credentials_var` reads outside the per-request scope). `tests/test_middleware.py:83-87` (`test_token_reaches_request_context_and_is_reset`) does exercise the real `_credentials_var` path, but only for one request at a time — there is no test that drives two **concurrent** requests through the real middleware and asserts the contextvar does not leak between them, which is exactly what AC16 and the SOP's "no cross-request state" rule are about. The `ac.json` evidence for TC-RS-016 ("both PASSED") therefore overstates what was actually verified: the genuinely interesting concurrency property (shared module-level ContextVar under real request concurrency) is untested.
+   - What would fix it: extend `test_middleware.py`'s own `_run_middleware` helper (or add a new test) to invoke `GatewayCredentialsMiddleware` for two different tenants via `asyncio.gather` against the same middleware/app instance (sharing the real `_credentials_var`), and assert each request's `get_client_from_context()` only ever sees its own tenant's refresh token at every point during the overlap (e.g. with an injected delay like `tests/_fakes.py`'s `exchange_delay` pattern, but delaying inside the downstream app itself rather than inside a client built outside the middleware).
+
+### Suggestions
+
+1. `src/roboshadow_mcp/tools/reports.py:99-115` — `roboshadow_get_report` carries 8 boolean filter parameters that only apply to `report="updates_by_device"`. Per the 2026-10-28 rule this is a suggestion, not a must-fix: consider collapsing them into a single `update_filters` object/dict parameter if this tool grows more per-report filter groups later.
+2. `tests/test_isolation.py` — once the must-fix above is addressed, consider keeping the existing two tests as well (they still validate that `RoboShadowClient` instances and their lazily-exchanged tokens never share `self._access_token`), just not as the sole evidence for AC16's cross-request claim.
+
+### Not re-litigated
+
+- Credential handling (single header, per-request exchange, never cached), tool consolidation (14 tools vs. 40 endpoints), pagination defaults/caps, and error-code mapping all match the tech design and read correctly in `api_client.py`, `tools/*.py`.
+- `uv.lock` is committed; no `[tool.mypy]` in this repo, consistent with `gates.md`'s MCP convention (pytest only).
+- No DB/migrations in this repo (N/A for the migration BLOCKER checks).
+- Dockerfile: multi-stage, non-root `app` user, `curl` installed for the `HEALTHCHECK`, matches SOP SS8.
