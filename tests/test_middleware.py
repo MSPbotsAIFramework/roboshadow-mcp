@@ -92,39 +92,35 @@ def test_credentials_repr_hides_refresh_token():
     assert "secret-refresh-token" not in repr(seen["credentials"])
 
 
-async def test_concurrent_requests_through_real_middleware_never_leak_credentials():
-    """AC16 / TC-RS-016 (review round 1 must-fix): two concurrent requests, both
-    routed through the *same* GatewayCredentialsMiddleware instance and sharing
-    the real module-level `_credentials_var`, must never see each other's
-    refresh token -- not because two unrelated objects were built separately
-    (tests/test_isolation.py's `build_server` bypasses this middleware entirely),
-    but because the middleware's per-request ContextVar set/reset is correct
-    under genuine concurrency.
+async def test_requests_interleaved_in_one_context_do_not_leak_credentials_across_overlap():
+    """AC16 / TC-RS-016 (review round 2 must-fix on the round 1 fix,
+    tests/test_middleware.py:95-159): the round 1 test drove two "requests" via
+    `asyncio.gather`, which schedules each one as its own `asyncio.Task` --  and
+    every `asyncio.Task` gets an *independently copied* `contextvars.Context` at
+    creation. A `ContextVar.set()` performed inside one Task's copied context can
+    never be observed by a sibling Task's copied context, so that test could not
+    have failed even if `GatewayCredentialsMiddleware`'s
+    `finally: _credentials_var.reset(...)` (server.py:105-107) were missing --
+    verified empirically by commenting out both `.reset()` calls in the worktree
+    and re-running the suite: all tests, including the round 1 one, stayed green
+    (change not committed).
 
-    The delay lives inside the downstream ASGI app this middleware wraps, not
-    inside a client built outside the middleware, so both requests are
-    guaranteed to be in flight (both past their `_credentials_var.set`, neither
-    past its `reset`) at the same time -- the exact window AC16 cares about.
+    This test drives both "requests" as plain coroutine objects stepped by hand
+    with `.send(None)` -- no `asyncio.gather`, `asyncio.create_task`, or
+    `asyncio.ensure_future` anywhere, hence no `asyncio.Task` and no context copy
+    -- so both share the exact same `contextvars.Context` the way two requests
+    processed by one long-lived worker/connection would. Request A's downstream
+    app suspends at a bare `await asyncio.sleep(0)` checkpoint (CPython's
+    `asyncio.sleep(0)` is a plain generator `yield` with no Future and no event
+    loop involvement, so `.send(None)` drives it synchronously) after reading its
+    own credentials but *before* `GatewayCredentialsMiddleware.__call__`'s
+    `finally` resets them. Request B then runs to completion end-to-end in that
+    same still-open context, and only then is request A resumed. If `.reset()`
+    were missing or wrong, B's own `set()`/`reset()` pair would never restore
+    A's pending value, and resuming A would observe B's leftover token instead
+    of its own -- the exact cross-request leak AC16 forbids.
     """
-    overlap = {"in_flight": 0, "max_in_flight": 0}
-    seen: dict[str, tuple[str | None, str | None]] = {}
-
-    async def downstream_app(scope, receive, send):
-        request_id = scope["app_request_id"]
-        before = _credentials_var.get()
-        overlap["in_flight"] += 1
-        overlap["max_in_flight"] = max(overlap["max_in_flight"], overlap["in_flight"])
-        await asyncio.sleep(0.05)  # yield control so the other request's set() can race in
-        overlap["in_flight"] -= 1
-        after = _credentials_var.get()
-        seen[request_id] = (
-            before.refresh_token if before else None,
-            after.refresh_token if after else None,
-        )
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b""})
-
-    middleware = GatewayCredentialsMiddleware(downstream_app)
+    recorded: dict[str, str | None] = {}
 
     async def receive():
         return {"type": "http.request", "body": b"", "more_body": False}
@@ -132,28 +128,58 @@ async def test_concurrent_requests_through_real_middleware_never_leak_credential
     async def send(_message):
         return None
 
-    async def one_request(request_id: str, token: str):
-        scope = {
+    def scope_for(token: str) -> dict:
+        return {
             "type": "http",
             "path": "/mcp",
             "headers": [(b"x-roboshadow-refresh-token", token.encode())],
-            "app_request_id": request_id,
         }
-        await middleware(scope, receive, send)
 
-    await asyncio.gather(
-        one_request("req-a", "tenant-a-refresh"),
-        one_request("req-b", "tenant-b-refresh"),
-    )
+    async def downstream_a(scope, receive, send):
+        before = _credentials_var.get()
+        recorded["a_before"] = before.refresh_token if before else None
+        await asyncio.sleep(0)  # suspend here; request B runs to completion while we're paused
+        after = _credentials_var.get()
+        recorded["a_after"] = after.refresh_token if after else None
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
 
-    # Both requests were genuinely in flight at once -- this is not a sequential run.
-    assert overlap["max_in_flight"] == 2
+    async def downstream_b(scope, receive, send):
+        before = _credentials_var.get()
+        recorded["b_before"] = before.refresh_token if before else None
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
 
-    before_a, after_a = seen["req-a"]
-    before_b, after_b = seen["req-b"]
-    assert (before_a, after_a) == ("tenant-a-refresh", "tenant-a-refresh")
-    assert (before_b, after_b) == ("tenant-b-refresh", "tenant-b-refresh")
+    coro_a = GatewayCredentialsMiddleware(downstream_a)(scope_for("tenant-a-refresh"), receive, send)
+    coro_b = GatewayCredentialsMiddleware(downstream_b)(scope_for("tenant-b-refresh"), receive, send)
 
-    # Both finished; the shared ContextVar must be clean again, not stuck on
-    # whichever request happened to reset() last.
+    assert _credentials_var.get() is None
+
+    # Step A exactly once: this runs middleware A's `set()` and downstream_a up to
+    # its `await asyncio.sleep(0)` checkpoint, then suspends -- a single `.send(None)`
+    # advances a coroutine only to its *next* suspension point, never past it.
+    # Middleware A's `finally` has NOT run yet: A's credentials are still live.
+    coro_a.send(None)
+    assert recorded["a_before"] == "tenant-a-refresh"
+    assert "a_after" not in recorded, "request A ran to completion in one step; the pause point is broken"
+
+    # Run B fully to completion in one `.send(None)` -- downstream_b never awaits
+    # anything that suspends, so this one step runs middleware B start to finish,
+    # in the exact same context (no Task was ever created for either request).
+    with pytest.raises(StopIteration):
+        coro_b.send(None)
+    assert recorded["b_before"] == "tenant-b-refresh"
+
+    # B's middleware reset the var back to whatever preceded B's own `set()` --
+    # i.e. back to A's still-pending credentials, since A has not reset yet.
+    still_pending = _credentials_var.get()
+    assert still_pending is not None and still_pending.refresh_token == "tenant-a-refresh"
+
+    # Resume A to completion. A leaking `GatewayCredentialsMiddleware` -- e.g. a
+    # missing or misplaced `.reset()` -- would surface here as A observing B's token.
+    with pytest.raises(StopIteration):
+        coro_a.send(None)
+    assert recorded["a_after"] == "tenant-a-refresh"
+
+    # Both finished; the shared ContextVar must be clean again.
     assert _credentials_var.get() is None
