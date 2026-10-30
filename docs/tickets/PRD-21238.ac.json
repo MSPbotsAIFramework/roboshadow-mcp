@@ -7,7 +7,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_list_organisations_returns_visible_orgs"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: tests/test_tools.py::test_list_organisations_returns_visible_orgs PASSED. Also exercised live: GET /mcp tools/call roboshadow_list_organisations against https://api.roboshadow.com with a placeholder refresh token returned a structured {\"error\":{\"code\":\"unauthorized\",...}} envelope (not a crash/500), confirming the real exchange+call path runs end to end; organisation data itself needs a real vendor account (TC-RS-018)."
   },
   {
     "id": "TC-RS-002",
@@ -18,7 +20,9 @@
     "tests": [
       "tests/test_tools.py::test_list_organisation_users_returns_users",
       "tests/test_tools.py::test_list_organisation_users_maps_403_to_unauthorized"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. The 403-mapping test hits a fake org ('org-forbidden') returning HTTP 403 and asserts the tool result's error.code == 'unauthorized' (api_client.py _STATUS_TO_CODE[403])."
   },
   {
     "id": "TC-RS-003",
@@ -29,7 +33,9 @@
     "tests": [
       "tests/test_tools.py::test_list_devices_default_page_has_more",
       "tests/test_tools.py::test_list_devices_search_and_sort_filters"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. Fake transport serves 60 devices; default call returns exactly 50 items with has_more=true (total=60); search='PC-05' + sort_desc=true returns only matching items."
   },
   {
     "id": "TC-RS-004",
@@ -40,7 +46,9 @@
     "tests": [
       "tests/test_tools.py::test_get_device_returns_summary",
       "tests/test_tools.py::test_get_device_unknown_id_returns_not_found"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED. Fake transport returns HTTP 404 for device_id='dev-missing'; tool result's error.code == 'not_found' (api_client.py _STATUS_TO_CODE[404])."
   },
   {
     "id": "TC-RS-005",
@@ -50,7 +58,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_get_device_detail_all_sections"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_device_detail_all_sections PASSED for all 7 parametrized non-disks sections, plus an added test_get_device_detail_disks_section_returns_raw_vendor_array (PASSED) covering the 8th ('disks') separately because that vendor endpoint returns a plain array, not the {pagedData,totalItems} envelope the others use -- same AC, same tool, one extra test function to match the real response shape (noted as an addition, not a change to the AC)."
   },
   {
     "id": "TC-RS-006",
@@ -60,7 +70,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_list_disk_shares_returns_shares"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_list_disk_shares_returns_shares PASSED."
   },
   {
     "id": "TC-RS-007",
@@ -71,7 +83,9 @@
     "tests": [
       "tests/test_tools.py::test_list_application_groups_returns_groups",
       "tests/test_tools.py::test_list_application_groups_detail_for_group_id"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
   },
   {
     "id": "TC-RS-008",
@@ -81,7 +95,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_get_report_antivirus_and_firewall_variants"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_antivirus_and_firewall_variants PASSED for all 6 parametrized report values."
   },
   {
     "id": "TC-RS-009",
@@ -92,7 +108,9 @@
     "tests": [
       "tests/test_tools.py::test_get_report_vulnerability_variants",
       "tests/test_tools.py::test_get_cve_fixes_returns_fixes"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_vulnerability_variants PASSED for all 5 parametrized report values; test_get_cve_fixes_returns_fixes PASSED."
   },
   {
     "id": "TC-RS-010",
@@ -103,7 +121,9 @@
     "tests": [
       "tests/test_tools.py::test_get_report_remediation",
       "tests/test_tools.py::test_get_remediation_cves_returns_cves"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
   },
   {
     "id": "TC-RS-011",
@@ -114,7 +134,9 @@
     "tests": [
       "tests/test_tools.py::test_get_report_updates_variants",
       "tests/test_tools.py::test_get_report_updates_by_device_filters"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_updates_variants PASSED for both report values; test_get_report_updates_by_device_filters PASSED (critical=true narrows the fake transport's result to items with critical=true)."
   },
   {
     "id": "TC-RS-012",
@@ -124,7 +146,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_get_report_hardware_and_disk_variants"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_report_hardware_and_disk_variants PASSED for all 5 parametrized report values."
   },
   {
     "id": "TC-RS-013",
@@ -134,7 +158,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_get_mfa_report_returns_report"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_get_mfa_report_returns_report PASSED (asserts users list and security_defaults_enabled are reshaped from the vendor's hasMoreData/securityDefaultsSetting/users envelope)."
   },
   {
     "id": "TC-RS-014",
@@ -145,7 +171,9 @@
     "tests": [
       "tests/test_tools.py::test_list_vulnerability_scans_returns_status",
       "tests/test_tools.py::test_get_vulnerability_scan_summary_and_scanned_ips"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: both PASSED."
   },
   {
     "id": "TC-RS-015",
@@ -155,7 +183,9 @@
     "source": "design",
     "tests": [
       "tests/test_middleware.py::test_missing_credential_header_returns_401_with_required_headers"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: PASSED for header values [None, '', '   ']. Also verified live: starting the real server (uv run python -m roboshadow_mcp) and `curl -X POST :8080/mcp` with no X-RoboShadow-Refresh-Token header returned HTTP 401 with body {\"required_headers\":[\"X-RoboShadow-Refresh-Token\"],...} -- see docs/tickets/PRD-21238.md Self-test section."
   },
   {
     "id": "TC-RS-016",
@@ -165,7 +195,9 @@
     "source": "design",
     "tests": [
       "tests/test_isolation.py::test_concurrent_tenants_never_share_access_token_or_data"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: PASSED, plus a second isolation test (test_concurrent_access_token_exchanges_do_not_cross, also PASSED) that forces two token exchanges to genuinely overlap in time (artificial 50ms delay in the fake transport) via asyncio.gather and asserts the two resulting access tokens and tenant org data never cross -- not just that they happen not to race in practice."
   },
   {
     "id": "TC-RS-017",
@@ -175,7 +207,9 @@
     "source": "design",
     "tests": [
       "tests/test_tools.py::test_tools_list_snapshot"
-    ]
+    ],
+    "result": "pass",
+    "evidence": "uv run pytest -v @ 01561e7: test_tools_list_snapshot, test_required_params[*] (14 params) and test_all_tools_are_read_only[*] (14 tools) all PASSED. Also verified live: curl tools/list against the running server (placeholder header) returned exactly 14 roboshadow_* tool names, matching the EXPECTED_TOOLS snapshot."
   },
   {
     "id": "TC-RS-018",
@@ -188,7 +222,7 @@
       "Compare each response's field names/types against the OpenAPI schema assumptions in the tech design"
     ],
     "expect": "Every field the design assumes from the OpenAPI schema is present with the expected type in the live response; any divergence is filed as a follow-up before relying on that field.",
-    "result": "untested",
-    "evidence": "needs a real vendor account — not available at design or dev time; see references/mcp-track.md 2.5 (no test account does not block this ticket)"
+    "result": "blocked",
+    "evidence": "needs a real vendor account -- not available at design or dev time; see references/mcp-track.md 2.5 (no test account does not block this ticket). Partial substitute evidence: a placeholder refresh token was used against the real https://api.roboshadow.com and correctly produced a structured unauthorized error envelope (not a crash), confirming the exchange+call wiring itself is live-correct; only the field-shape assumptions remain unverified."
   }
 ]
