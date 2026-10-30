@@ -68,3 +68,37 @@ Re-reviewed the round 1 fix (`790a302`, `8946c07`) on top of the rest of the dif
    - Updated `docs/tickets/PRD-21238.ac.json` TC-RS-016: `tests` now points at the new test (keeping the two `test_isolation.py` tests as secondary evidence, unchanged from round 1); `evidence` rewritten to describe the one-context interleaving mechanism and the empirical leak-detection check above.
    - Re-run on `e1e81ea` (synced with `main @ a5fb393`, unchanged since round 1 and round 2): `uv run pytest -q` → **106 passed, 0 failed** (same count as round 1 — one test replaced, not added). `/health` → 200. Missing-header request → 401. `tools/list` with a placeholder token → 14 tools (unchanged). Chinese-character scan: clean. README "MSPbots Connector" section (`README.md:17-87`) re-diffed byte-for-byte against `~/.claude/skills/vendor-mcp-development/reference/readme-connector-section.md`: identical, untouched by this commit (`git diff --name-only ad33269..e1e81ea` touches only `tests/test_middleware.py` and `docs/tickets/PRD-21238.ac.json`). `gitleaks` not available on this machine (same as round 1/2 environment).
    - Suggestion 1 (`reports.py` boolean filter params) not addressed — still a suggestion, not a must-fix, out of scope for a review-rework round scoped to the one listed must-fix.
+
+## Round 3 · 2026-10-30 · reviewed dev/PRD-21238 @ d526721 (base main @ a5fb393)
+
+Status: frozen @ d526721424973d36f735700a6521a4f35ba8e79c
+
+Verdict: approved
+
+### Scope
+
+`git diff ad33269...d526721` — only `tests/test_middleware.py`, `docs/tickets/PRD-21238.ac.json`, `docs/tickets/PRD-21238-review.md` (round 2's fix for the one outstanding must-fix). Nothing else changed since round 2 (`git diff --stat ad33269..d526721` confirms the same three files).
+
+### Verification
+
+Independently reproduced round 2's fix claim rather than taking the Fixes note at face value:
+
+1. Ran `uv run pytest -q` on `d526721` (synced with `main @ a5fb393`, unchanged) → **106 passed, 0 failed**, same count as round 1/2 (one test replaced, not added).
+2. Read `src/roboshadow_mcp/server.py:75-107` (`GatewayCredentialsMiddleware`): confirms the production code does use `contextvars.ContextVar.set()`/`.reset(token)` with the token returned by `set()`, inside a `try/finally`, exactly as the fix's narrative assumes.
+3. Read `tests/test_middleware.py::test_requests_interleaved_in_one_context_do_not_leak_credentials_across_overlap`: confirms it drives both "requests" as bare coroutine objects advanced by hand with `.send(None)` — no `asyncio.gather`/`create_task`/`ensure_future` anywhere in the test — so both run in one shared `contextvars.Context`, unlike round 1's `asyncio.gather`-based test (which round 2 correctly showed gets an independently-copied `Context` per `asyncio.Task` and so could never observe a missing `reset()`).
+4. Reproduced the negative control myself: temporarily removed both `_credentials_var.reset(creds_token)` and `request_id_var.reset(rid_token)` from `server.py:105-107` (`finally: pass  # TEMP`) and re-ran `uv run pytest -q` — the new test fails at `still_pending.refresh_token == "tenant-a-refresh"`, observing `"tenant-b-refresh"` instead (request B's leftover credentials leaked into resumed request A), exactly as the Fixes note claims; 7 of 8 tests in the file still passed, confirming the failure is specific to this one test and not a broken fixture. Restored `server.py` from a pre-edit copy immediately after (`git status --porcelain` clean before continuing); nothing from this experiment was committed. Re-ran the full suite once more post-restore: 106 passed, 0 failed.
+5. `README.md:17-87` ("MSPbots Connector" section) re-diffed against `~/.claude/skills/vendor-mcp-development/reference/readme-connector-section.md`: byte-identical. Chinese-character scan (`grep -rnP '[\x{4e00}-\x{9fff}]' --exclude-dir=.git --exclude-dir=.venv .`): clean.
+
+The fix genuinely has the detection power round 1 and round 2 both found missing. No new findings.
+
+### Findings
+
+None.
+
+### Suggestions
+
+1. `src/roboshadow_mcp/tools/reports.py:99-115` — carried over from round 1/2, still unaddressed, still a suggestion not a must-fix (2026-10-28 rule).
+
+### Not re-litigated
+
+- Everything round 1 cleared (credential handling, tool consolidation, pagination defaults/caps, error-code mapping, README connector section, Dockerfile, no DB/migrations) — untouched since round 1.
